@@ -1,0 +1,48 @@
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
+from dotenv import load_dotenv
+
+load_dotenv()
+
+
+@dataclass(frozen=True)
+class Settings:
+    token: str = os.getenv("DISCORD_TOKEN", "")
+    client_id: str = os.getenv("DISCORD_CLIENT_ID", "")
+    guild_id: str = os.getenv("DISCORD_GUILD_ID", "")
+    database_path: str = os.getenv("DATABASE_PATH", "survival.db")
+    command_prefix: str = os.getenv("COMMAND_PREFIX", "!")
+
+
+SETTINGS = Settings()
+
+RESOURCES = ("wood", "stone", "iron", "food", "water", "herb", "hide", "gold")
+RESOURCE_NAMES = {
+    "wood": "Gỗ", "stone": "Đá", "iron": "Sắt", "food": "Lương thực",
+    "water": "Nước", "herb": "Thảo dược", "hide": "Da thú", "gold": "Vàng",
+}
+RESOURCE_EMOJIS = {
+    "wood": "🪵", "stone": "🪨", "iron": "⛓️", "food": "🌾",
+    "water": "💧", "herb": "🌿", "hide": "🦌", "gold": "🪙",
+}
+GATHER_ZONES = {
+    "forest": {"name": "Rừng", "drops": {"wood": (5, 14), "food": (1, 5)}},
+    "quarry": {"name": "Mỏ đá", "drops": {"stone": (5, 13), "iron": (0, 4)}},
+    "plain": {"name": "Đồng bằng", "drops": {"food": (5, 14), "herb": (0, 3)}},
+    "lake": {"name": "Hồ nước", "drops": {"water": (6, 16), "food": (0, 4)}},
+}
+BUILDINGS = {
+    "house": {"name": "Nhà dân", "cost": {"wood": 40, "stone": 20}, "effect": "Tăng giới hạn dân số"},
+    "storage": {"name": "Kho tài nguyên", "cost": {"wood": 60, "stone": 45}, "effect": "Tăng sức chứa kho chung"},
+    "farm": {"name": "Nông trại", "cost": {"wood": 50, "food": 20}, "effect": "Tăng hiệu quả lương thực"},
+    "workshop": {"name": "Xưởng chế tạo", "cost": {"wood": 70, "stone": 35, "iron": 10}, "effect": "Mở khóa chế tạo cơ bản"},
+    "wall": {"name": "Tường phòng thủ", "cost": {"stone": 100, "iron": 20}, "effect": "Tăng phòng thủ làng"},
+    "townhall": {"name": "Tòa thị chính", "cost": {"wood": 100, "stone": 100, "iron": 30}, "effect": "Mở khóa cấp làng tiếp theo"},
+}
+STARTING_RESOURCES = {"wood": 20, "stone": 10, "food": 10, "water": 10, "gold": 100}
+GATHER_ENERGY_COST = 10
+GATHER_COOLDOWN_SECONDS = 30
+DAILY_COOLDOWN_SECONDS = 86400
+MAX_DAILY_STREAK = 7

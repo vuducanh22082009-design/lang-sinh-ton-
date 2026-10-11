@@ -1,0 +1,9 @@
+services:
+  village-bot:
+    build: .
+    env_file: .env
+    restart: unless-stopped
+    ports:
+      - "10000:10000"
+    volumes:
+      - ./data:/app/data
