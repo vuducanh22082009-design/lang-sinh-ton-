@@ -128,3 +128,26 @@ def test_boss_defeat_pays_once_and_marks_inactive(game):
     assert game.boss_info("g")["active"] is False
     with pytest.raises(GameError, match="Chưa có boss"):
         game.attack_boss("g", "u", now=200)
+
+
+def test_pvp_requires_target_consent_and_has_shared_cooldown(game):
+    game.register("g", "a", "A")
+    game.register("g", "b", "B")
+    game.pvp_challenge("g", "a", "b", now=100)
+    with pytest.raises(GameError, match="Không tìm thấy lời mời"):
+        game.pvp_accept("g", "a", "b", now=101)
+    result = game.pvp_accept("g", "b", "a", now=101)
+    assert result["winner_id"] in {"a", "b"}
+    game.pvp_challenge("g", "a", "b", now=102)
+    with pytest.raises(GameError, match="cooldown"):
+        game.pvp_accept("g", "b", "a", now=103)
+
+
+def test_pvp_invite_expires_and_decline_is_explicit(game):
+    game.register("g", "a", "A")
+    game.register("g", "b", "B")
+    game.pvp_challenge("g", "a", "b", now=100)
+    with pytest.raises(GameError, match="hết hạn"):
+        game.pvp_accept("g", "b", "a", now=221)
+    game.pvp_challenge("g", "a", "b", now=300)
+    game.pvp_decline("g", "b", "a", now=301)

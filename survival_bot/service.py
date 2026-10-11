@@ -6,7 +6,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any
 
-from .config import BOSS, BOSS_ATTACK_COOLDOWN_SECONDS, BUILDINGS, COMBAT_COOLDOWN_SECONDS, COMBAT_ENERGY_COST, DAILY_COOLDOWN_SECONDS, ENEMIES, EXPLORE_ZONES, GATHER_COOLDOWN_SECONDS, GATHER_ENERGY_COST, GATHER_ZONES, MAX_DAILY_STREAK, QUESTS, RECIPES, RESOURCE_NAMES, STARTING_RESOURCES
+from .config import BOSS, BOSS_ATTACK_COOLDOWN_SECONDS, BUILDINGS, COMBAT_COOLDOWN_SECONDS, COMBAT_ENERGY_COST, DAILY_COOLDOWN_SECONDS, ENEMIES, EXPLORE_ZONES, GATHER_COOLDOWN_SECONDS, GATHER_ENERGY_COST, GATHER_ZONES, MAX_DAILY_STREAK, PVP_CHALLENGE_TTL_SECONDS, PVP_COOLDOWN_SECONDS, PVP_ENERGY_COST, PVP_WIN_REWARD_GOLD, QUESTS, RECIPES, RESOURCE_NAMES, STARTING_RESOURCES
 from .db import Database
 
 
@@ -372,3 +372,67 @@ class GameService:
                 c.execute("UPDATE village_bosses SET hp=?,updated_at=? WHERE guild_id=?", (boss_hp, now_iso(), guild_id))
             c.execute("INSERT INTO transaction_log(guild_id,user_id,action,resource,amount,details) VALUES (?,?, 'boss_attack','gold',?,?)", (guild_id, user_id, reward, BOSS["key"]))
         return {"name": BOSS["name"], "damage": damage, "incoming": incoming, "hp": boss_hp, "defeated": defeated, "reward_gold": reward}
+
+    def pvp_challenge(self, guild_id: str, challenger_id: str, challenged_id: str, now: float | None = None) -> dict[str, Any]:
+        now = now if now is not None else time.time()
+        if challenger_id == challenged_id:
+            raise GameError("Bạn không thể tự thách đấu chính mình.")
+        with self.db.transaction() as c:
+            challenger = self._player(c, guild_id, challenger_id)
+            challenged = self._player(c, guild_id, challenged_id)
+            c.execute("UPDATE pvp_matches SET status='expired' WHERE guild_id=? AND status='pending' AND expires_at<=?", (guild_id, now))
+            existing = c.execute("SELECT id FROM pvp_matches WHERE guild_id=? AND status='pending' AND expires_at>? AND ((challenger_id=? AND challenged_id=?) OR (challenger_id=? AND challenged_id=?))", (guild_id, now, challenger_id, challenged_id, challenged_id, challenger_id)).fetchone()
+            if existing:
+                raise GameError("Đã có một lời mời PvP đang chờ giữa hai người.")
+            existing_target = c.execute("SELECT id FROM pvp_matches WHERE guild_id=? AND challenged_id=? AND status='pending' AND expires_at>?", (guild_id, challenged_id, now)).fetchone()
+            if existing_target:
+                raise GameError("Người chơi này đang có một lời mời PvP khác đang chờ.")
+            cur = c.execute("INSERT INTO pvp_matches(guild_id,challenger_id,challenged_id,expires_at) VALUES (?,?,?,?)", (guild_id, challenger_id, challenged_id, now + PVP_CHALLENGE_TTL_SECONDS))
+        return {"match_id": cur.lastrowid, "challenger_name": challenger["character_name"], "challenged_name": challenged["character_name"], "expires_at": now + PVP_CHALLENGE_TTL_SECONDS}
+
+    def pvp_decline(self, guild_id: str, challenged_id: str, challenger_id: str, now: float | None = None) -> None:
+        now = now if now is not None else time.time()
+        with self.db.transaction() as c:
+            self._player(c, guild_id, challenged_id)
+            row = c.execute("SELECT id FROM pvp_matches WHERE guild_id=? AND challenger_id=? AND challenged_id=? AND status='pending' AND expires_at>? ORDER BY id DESC LIMIT 1", (guild_id, challenger_id, challenged_id, now)).fetchone()
+            if row is None:
+                raise GameError("Không tìm thấy lời mời PvP còn hiệu lực.")
+            c.execute("UPDATE pvp_matches SET status='declined' WHERE id=?", (row["id"],))
+            c.execute("INSERT INTO transaction_log(guild_id,user_id,action,details) VALUES (?,?, 'pvp_decline', ?)", (guild_id, challenged_id, str(row["id"])))
+
+    def pvp_accept(self, guild_id: str, challenged_id: str, challenger_id: str, now: float | None = None) -> dict[str, Any]:
+        now = now if now is not None else time.time()
+        with self.db.transaction() as c:
+            challenger = self._player(c, guild_id, challenger_id)
+            challenged = self._player(c, guild_id, challenged_id)
+            row = c.execute("SELECT * FROM pvp_matches WHERE guild_id=? AND challenger_id=? AND challenged_id=? AND status='pending' ORDER BY id DESC LIMIT 1", (guild_id, challenger_id, challenged_id)).fetchone()
+            if row is None:
+                raise GameError("Không tìm thấy lời mời PvP. Người chơi phải gửi lời mời trước.")
+            if row["expires_at"] <= now:
+                c.execute("UPDATE pvp_matches SET status='expired' WHERE id=?", (row["id"],))
+                raise GameError("Lời mời PvP đã hết hạn.")
+            for user_id in (challenger_id, challenged_id):
+                cd = c.execute("SELECT available_at FROM cooldowns WHERE guild_id=? AND user_id=? AND action='pvp'", (guild_id, user_id)).fetchone()
+                if cd and cd["available_at"] > now:
+                    raise GameError("Một trong hai người chơi vẫn đang trong cooldown PvP.")
+            if challenger["energy"] < PVP_ENERGY_COST or challenged["energy"] < PVP_ENERGY_COST:
+                raise GameError("Cả hai người chơi đều cần đủ năng lượng để PvP.")
+            hp_a, hp_b = challenger["max_hp"], challenged["max_hp"]
+            total_a, total_b, rounds = 0, 0, 0
+            while hp_a > 0 and hp_b > 0:
+                damage_a = max(1, self._combat_attack_power(c, guild_id, challenger_id) + self.rng.randint(-2, 3))
+                damage_b = max(1, self._combat_attack_power(c, guild_id, challenged_id) + self.rng.randint(-2, 3))
+                hp_b = max(0, hp_b - damage_a)
+                hp_a = max(0, hp_a - damage_b)
+                total_a += damage_a; total_b += damage_b; rounds += 1
+            winner_id = challenger_id if hp_b == 0 and hp_a > 0 else challenged_id if hp_a == 0 and hp_b > 0 else (challenger_id if total_a >= total_b else challenged_id)
+            winner_name = challenger["character_name"] if winner_id == challenger_id else challenged["character_name"]
+            c.execute("UPDATE players SET energy=energy-?,updated_at=? WHERE guild_id=? AND user_id IN (?,?)", (PVP_ENERGY_COST, now_iso(), guild_id, challenger_id, challenged_id))
+            c.execute("INSERT OR REPLACE INTO cooldowns VALUES (?,?, 'pvp', ?)", (guild_id, challenger_id, now + PVP_COOLDOWN_SECONDS))
+            c.execute("INSERT OR REPLACE INTO cooldowns VALUES (?,?, 'pvp', ?)", (guild_id, challenged_id, now + PVP_COOLDOWN_SECONDS))
+            c.execute("UPDATE players SET gold=gold+? WHERE guild_id=? AND user_id=?", (PVP_WIN_REWARD_GOLD, guild_id, winner_id))
+            self._add_xp(c, guild_id, winner_id, 20)
+            c.execute("UPDATE pvp_matches SET status='completed',winner_id=?,accepted_at=? WHERE id=?", (winner_id, now_iso(), row["id"]))
+            c.execute("INSERT INTO transaction_log(guild_id,user_id,action,resource,amount,details) VALUES (?,?, 'pvp_win','gold',?,?)", (guild_id, winner_id, PVP_WIN_REWARD_GOLD, str(row["id"])))
+            c.execute("INSERT INTO transaction_log(guild_id,user_id,action,details) VALUES (?,?, 'pvp_accept', ?)", (guild_id, challenged_id, str(row["id"])))
+        return {"winner_id": winner_id, "winner_name": winner_name, "challenger_name": challenger["character_name"], "challenged_name": challenged["character_name"], "rounds": rounds, "damage_challenger": total_a, "damage_challenged": total_b, "reward_gold": PVP_WIN_REWARD_GOLD}

@@ -22,6 +22,7 @@ Repository ban đầu là Python/discord.py, vì vậy MVP giữ hệ sinh thái
 - `/explore` với phần thưởng, túi vàng và bẫy, kèm cooldown.
 - `/hunt` combat nhiều lượt với quái vật, sát thương, HP, XP, vàng, loot và độ bền vũ khí.
 - `/boss`, `/boss-attack` boss chung theo server; toàn bộ người chơi cùng gây sát thương trong transaction.
+- `/pvp challenge`, `/pvp accept`, `/pvp decline`; trận chỉ bắt đầu sau khi người được mời chủ động accept.
 - `/admin give`, `/admin logs`, `/admin event-start`, `/admin village-reset` với kiểm tra quyền Administrator.
 - Structured logging cơ bản, endpoint health `/`, xử lý lỗi thân thiện.
 - Unit test cho đăng ký, cooldown, daily, tách server, đóng góp, race condition, craft và explore.
@@ -61,6 +62,7 @@ pytest -q
 7. Dùng `/leaderboard` xem xếp hạng riêng của server.
 8. Dùng `/hunt enemy:Sói hoang` để chiến đấu; dùng `/boss` xem boss chung và `/boss-attack` để góp sát thương.
 9. Khi boss bị hạ, admin có thể dùng `/admin event-start` để mở đợt boss mới.
+10. PvP: dùng `/pvp challenge opponent:@NguoiChoi`; đối phương dùng `/pvp accept opponent:@Ban` để đồng ý, hoặc `/pvp decline` để từ chối.
 
 ## Cấu trúc
 

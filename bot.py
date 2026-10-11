@@ -99,7 +99,7 @@ async def guide(interaction: discord.Interaction) -> None:
     )
     embed.add_field(
         name="6. Chế tạo và chiến đấu",
-        value="Dùng `/craft` chế tạo, `/equip` trang bị, `/hunt` săn quái. Khi làng có boss, dùng `/boss` xem HP và `/boss-attack` cùng mọi người tấn công.",
+        value="Dùng `/craft` chế tạo, `/equip` trang bị, `/hunt` săn quái. Khi làng có boss, dùng `/boss` xem HP và `/boss-attack` cùng mọi người tấn công. PvP dùng `/pvp challenge`, nhưng trận chỉ bắt đầu khi đối phương `/pvp accept`.",
         inline=False,
     )
     embed.add_field(
@@ -249,6 +249,34 @@ async def boss_attack(interaction: discord.Interaction) -> None:
         description = f"⚔️ Bạn gây **{r['damage']}** sát thương và nhận **{r['incoming']}** sát thương.\n❤️ Boss còn: **{r['hp']}/{BOSS['max_hp']}**"
         if r["defeated"]: description += f"\n\n🏆 **Boss đã bị đánh bại!** Bạn nhận **{r['reward_gold']} vàng**."
         await interaction.response.send_message(embed=discord.Embed(title="Đánh boss", description=description, color=0xF1C40F if r["defeated"] else 0xE74C3C))
+    except GameError as e: await interaction.response.send_message(embed=error_embed(str(e)), ephemeral=True)
+
+
+pvp = app_commands.Group(name="pvp", description="Đấu PvP có sự đồng ý của cả hai người chơi")
+bot.tree.add_command(pvp)
+
+
+@pvp.command(name="challenge", description="Gửi lời mời PvP")
+async def pvp_challenge(interaction: discord.Interaction, opponent: discord.Member) -> None:
+    try:
+        r = game.pvp_challenge(guild_id(interaction), str(interaction.user.id), str(opponent.id))
+        await interaction.response.send_message(f"⚔️ {opponent.mention}, **{r['challenger_name']}** đã mời bạn PvP. Hai bên chỉ đấu khi bạn dùng `/pvp accept opponent:{interaction.user.mention}` trong vòng 120 giây.")
+    except GameError as e: await interaction.response.send_message(embed=error_embed(str(e)), ephemeral=True)
+
+
+@pvp.command(name="accept", description="Đồng ý lời mời PvP và bắt đầu trận")
+async def pvp_accept(interaction: discord.Interaction, opponent: discord.Member) -> None:
+    try:
+        r = game.pvp_accept(guild_id(interaction), str(interaction.user.id), str(opponent.id))
+        await interaction.response.send_message(embed=discord.Embed(title="Kết quả PvP", description=f"⚔️ **{r['challenger_name']}** vs **{r['challenged_name']}**\n🏆 Người thắng: **{r['winner_name']}**\n🔁 Số lượt: **{r['rounds']}**\n🎁 Phần thưởng người thắng: **{r['reward_gold']} vàng**", color=0x9B59B6))
+    except GameError as e: await interaction.response.send_message(embed=error_embed(str(e)), ephemeral=True)
+
+
+@pvp.command(name="decline", description="Từ chối lời mời PvP")
+async def pvp_decline(interaction: discord.Interaction, opponent: discord.Member) -> None:
+    try:
+        game.pvp_decline(guild_id(interaction), str(interaction.user.id), str(opponent.id))
+        await interaction.response.send_message("✅ Đã từ chối lời mời PvP.", ephemeral=True)
     except GameError as e: await interaction.response.send_message(embed=error_embed(str(e)), ephemeral=True)
 
 

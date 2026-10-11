@@ -56,9 +56,16 @@ CREATE TABLE IF NOT EXISTS village_bosses (
   active INTEGER NOT NULL DEFAULT 1, spawned_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (guild_id) REFERENCES villages(guild_id) ON DELETE CASCADE
 );
+CREATE TABLE IF NOT EXISTS pvp_matches (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id TEXT NOT NULL, challenger_id TEXT NOT NULL, challenged_id TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','accepted','declined','expired','completed')),
+  winner_id TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, expires_at REAL NOT NULL, accepted_at TEXT,
+  FOREIGN KEY (guild_id) REFERENCES villages(guild_id) ON DELETE CASCADE
+);
 CREATE INDEX IF NOT EXISTS idx_players_level ON players(guild_id, level DESC, xp DESC);
 CREATE INDEX IF NOT EXISTS idx_players_gold ON players(guild_id, gold DESC);
 CREATE INDEX IF NOT EXISTS idx_transactions_guild ON transaction_log(guild_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_pvp_pending ON pvp_matches(guild_id, challenged_id, status, expires_at);
 """
 
 
