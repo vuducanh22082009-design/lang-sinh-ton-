@@ -68,6 +68,24 @@ Repository đã có [`render.yaml`](./render.yaml). File này cấu hình Docker
 
 Không đổi service sang loại không có volume nếu muốn giữ dữ liệu game. Khi chuyển sang PostgreSQL production, thay `Database` bằng repository PostgreSQL và dùng `DATABASE_URL` thay cho SQLite.
 
+## Cấu hình UptimeRobot
+
+UptimeRobot chỉ dùng để kiểm tra HTTP health endpoint; nó không thay thế Render và không khởi động bot nếu Render service đã dừng.
+
+1. Trong Render, mở service và copy **Public URL**, ví dụ `https://village-survival-bot.onrender.com`.
+2. Tạo monitor mới trên [UptimeRobot](https://uptimerobot.com/).
+3. Chọn loại **HTTP(s)**.
+4. Đặt URL monitor là:
+
+```text
+https://<ten-service>.onrender.com/health
+```
+
+5. Chọn chu kỳ kiểm tra phù hợp, ví dụ 5 phút, rồi lưu monitor.
+6. Khi endpoint trả HTTP `200` và JSON có `"status": "ok"`, monitor sẽ báo UP.
+
+Không đặt `DISCORD_TOKEN` vào UptimeRobot. Token chỉ được lưu trong Render Environment.
+
 ## Kiểm thử
 
 ```bash

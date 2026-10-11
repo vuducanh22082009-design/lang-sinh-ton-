@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 import threading
 from flask import Flask
@@ -37,7 +38,14 @@ def health_details():
         return {"status": "error"}, 503
 
 def run_health() -> None:
-    app.run(host="0.0.0.0", port=int(__import__("os").environ.get("PORT", "10000")), use_reloader=False)
+    port = int(os.getenv("PORT", "10000"))
+    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False, threaded=True)
+
+
+def keep_alive() -> None:
+    """Start the HTTP health server used by Render and an external monitor."""
+    thread = threading.Thread(target=run_health, name="health-server", daemon=True)
+    thread.start()
 
 db = Database(SETTINGS.database_path)
 game = GameService(db)
@@ -350,5 +358,5 @@ async def on_command_error(interaction: discord.Interaction, error: app_commands
 
 if __name__ == "__main__":
     if not SETTINGS.token: raise RuntimeError("Thiếu DISCORD_TOKEN trong file .env")
-    threading.Thread(target=run_health, daemon=True).start()
+    keep_alive()
     bot.run(SETTINGS.token)
