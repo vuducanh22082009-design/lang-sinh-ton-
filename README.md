@@ -6,8 +6,6 @@ Bot mini game sinh tồn nhiều người chơi: mỗi Discord server có một 
 
 Repository ban đầu là Python/discord.py, vì vậy MVP giữ hệ sinh thái hiện tại thay vì chuyển đột ngột sang Node.js. Dữ liệu dùng **SQLite** để chạy local không cần dịch vụ ngoài; lớp `Database` dùng transaction `BEGIN IMMEDIATE`, khóa ngoại, CHECK quantity >= 0 và schema có thể chuyển sang PostgreSQL ở giai đoạn tiếp theo.
 
-Mã bot cũ được giữ tại `legacy_bot.py` để có thể tham khảo hoặc rollback.
-
 ## Đã hoàn thành
 
 - `/start` đăng ký nhân vật theo từng server, quà khởi đầu và chống đăng ký trùng.
@@ -67,7 +65,6 @@ survival_bot/config.py    # config gameplay, tên tài nguyên, chi phí
 survival_bot/db.py        # SQLite schema và transaction
 survival_bot/service.py   # nghiệp vụ game, không phụ thuộc Discord
 tests/test_game.py        # unit tests
-legacy_bot.py             # bot cũ từ repository trước MVP
 ```
 
 ## Chưa làm / hướng mở rộng
