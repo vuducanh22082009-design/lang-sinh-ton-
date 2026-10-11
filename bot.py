@@ -7,7 +7,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from survival_bot.config import BOSS, BUILDINGS, ENEMIES, EXPLORE_ZONES, GATHER_ZONES, RECIPES, RESOURCE_NAMES, SETTINGS
+from survival_bot.config import ADMIN_USER_IDS, BOSS, BUILDINGS, ENEMIES, EXPLORE_ZONES, GATHER_ZONES, RECIPES, RESOURCE_NAMES, SETTINGS
 from survival_bot.db import Database
 from survival_bot.service import GameError, GameService, xp_needed
 
@@ -285,6 +285,8 @@ bot.tree.add_command(admin)
 
 
 def require_admin(interaction: discord.Interaction) -> None:
+    if str(interaction.user.id) in ADMIN_USER_IDS:
+        return
     if not isinstance(interaction.user, discord.Member) or not interaction.user.guild_permissions.administrator:
         raise GameError("Bạn cần quyền Administrator để dùng lệnh này.")
 

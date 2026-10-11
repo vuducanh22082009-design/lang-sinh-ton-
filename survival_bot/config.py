@@ -18,6 +18,13 @@ class Settings:
 
 SETTINGS = Settings()
 
+_configured_admin_ids = {
+    item.strip()
+    for item in os.getenv("ADMIN_USER_IDS", "1026417896114630676").split(",")
+    if item.strip().isdigit()
+}
+ADMIN_USER_IDS = frozenset(_configured_admin_ids)
+
 RESOURCES = ("wood", "stone", "iron", "food", "water", "herb", "hide", "gold")
 RESOURCE_NAMES = {
     "wood": "Gỗ", "stone": "Đá", "iron": "Sắt", "food": "Lương thực",

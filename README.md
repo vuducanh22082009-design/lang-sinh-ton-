@@ -44,6 +44,7 @@ Bot cần scope `bot` và `applications.commands`; permissions MVP có thể dù
 - `DISCORD_CLIENT_ID`: để quản lý cấu hình; không cần trong runtime hiện tại.
 - `DISCORD_GUILD_ID`: tùy chọn, sync command tức thì cho một server test. Bỏ trống để sync global.
 - `DATABASE_PATH`: mặc định `survival.db`.
+- `ADMIN_USER_IDS`: danh sách ID Discord admin, phân tách bằng dấu phẩy. Mặc định đã có `1026417896114630676`; admin ID này được dùng lệnh admin kể cả khi không có quyền Administrator trong server.
 
 ## Kiểm thử
 
