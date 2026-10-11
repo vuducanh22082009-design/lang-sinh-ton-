@@ -58,3 +58,13 @@ QUESTS = {
     "gather_wood": {"name": "Thu thập 20 gỗ", "target": 20, "resource": "wood", "reward_gold": 60, "reward_xp": 40},
     "contribute": {"name": "Đóng góp 10 tài nguyên cho làng", "target": 10, "resource": "any", "reward_gold": 80, "reward_xp": 50},
 }
+
+ENEMIES = {
+    "wolf": {"name": "Sói hoang", "hp": 35, "attack": (5, 10), "reward_gold": (25, 45), "reward_xp": 35, "drop": ("hide", 2)},
+    "boar": {"name": "Lợn rừng", "hp": 50, "attack": (7, 13), "reward_gold": (35, 60), "reward_xp": 50, "drop": ("food", 4)},
+    "mutant": {"name": "Quái vật đột biến", "hp": 75, "attack": (10, 18), "reward_gold": (60, 100), "reward_xp": 85, "drop": ("iron", 3)},
+}
+BOSS = {"key": "ancient_beast", "name": "Cổ thú Bình Minh", "max_hp": 1200, "attack": (12, 24), "reward_gold": 250, "reward_xp": 180, "drop": ("iron", 10)}
+COMBAT_ENERGY_COST = 15
+COMBAT_COOLDOWN_SECONDS = 90
+BOSS_ATTACK_COOLDOWN_SECONDS = 30

@@ -6,7 +6,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any
 
-from .config import BUILDINGS, DAILY_COOLDOWN_SECONDS, EXPLORE_ZONES, GATHER_COOLDOWN_SECONDS, GATHER_ENERGY_COST, GATHER_ZONES, MAX_DAILY_STREAK, QUESTS, RECIPES, RESOURCE_NAMES, STARTING_RESOURCES
+from .config import BOSS, BOSS_ATTACK_COOLDOWN_SECONDS, BUILDINGS, COMBAT_COOLDOWN_SECONDS, COMBAT_ENERGY_COST, DAILY_COOLDOWN_SECONDS, ENEMIES, EXPLORE_ZONES, GATHER_COOLDOWN_SECONDS, GATHER_ENERGY_COST, GATHER_ZONES, MAX_DAILY_STREAK, QUESTS, RECIPES, RESOURCE_NAMES, STARTING_RESOURCES
 from .db import Database
 
 
@@ -270,3 +270,105 @@ class GameService:
         with self.db.transaction() as c:
             c.execute("DELETE FROM villages WHERE guild_id=?", (guild_id,))
         self.ensure_village(guild_id)
+
+    def _combat_attack_power(self, c: sqlite3.Connection, guild_id: str, user_id: str) -> int:
+        player = self._player(c, guild_id, user_id)
+        weapon = c.execute("SELECT item_key, durability FROM item_inventory WHERE guild_id=? AND user_id=? AND equipped=1 AND quantity>0", (guild_id, user_id)).fetchone()
+        bonus = 0
+        if weapon and weapon["durability"] > 0:
+            bonus = 10 if "sword" in weapon["item_key"] else 4
+            c.execute("UPDATE item_inventory SET durability=durability-1 WHERE guild_id=? AND user_id=? AND item_key=?", (guild_id, user_id, weapon["item_key"]))
+        return 8 + player["level"] * 2 + bonus
+
+    def hunt(self, guild_id: str, user_id: str, enemy_key: str | None = None, now: float | None = None) -> dict[str, Any]:
+        now = now if now is not None else time.time()
+        enemy_key = enemy_key or self.rng.choice(tuple(ENEMIES))
+        enemy = ENEMIES.get(enemy_key)
+        if enemy is None:
+            raise GameError("Loài quái vật không hợp lệ.")
+        with self.db.transaction() as c:
+            player = self._player(c, guild_id, user_id)
+            cd = c.execute("SELECT available_at FROM cooldowns WHERE guild_id=? AND user_id=? AND action='hunt'", (guild_id, user_id)).fetchone()
+            if cd and cd["available_at"] > now:
+                raise GameError(f"Bạn còn phải chờ {int(cd['available_at'] - now) + 1} giây để săn tiếp.")
+            if player["energy"] < COMBAT_ENERGY_COST:
+                raise GameError("Bạn không đủ năng lượng để chiến đấu.")
+            enemy_hp = enemy["hp"]
+            new_hp = player["hp"]
+            damage = 0
+            incoming = 0
+            rounds = 0
+            while enemy_hp > 0 and new_hp > 0:
+                attack = self._combat_attack_power(c, guild_id, user_id)
+                dealt = max(1, attack + self.rng.randint(-2, 4))
+                damage += dealt
+                enemy_hp = max(0, enemy_hp - dealt)
+                rounds += 1
+                if enemy_hp > 0:
+                    taken = self.rng.randint(*enemy["attack"])
+                    incoming += taken
+                    new_hp = max(0, new_hp - taken)
+            won = enemy_hp == 0 and new_hp > 0
+            reward_gold = self.rng.randint(*enemy["reward_gold"]) if won else 0
+            if won:
+                drop_resource, drop_amount = enemy["drop"]
+                c.execute("UPDATE inventory SET quantity=quantity+? WHERE guild_id=? AND user_id=? AND resource=?", (drop_amount, guild_id, user_id, drop_resource))
+                c.execute("INSERT INTO transaction_log(guild_id,user_id,action,resource,amount,details) VALUES (?,?, 'hunt_drop',?,?,?)", (guild_id, user_id, drop_resource, drop_amount, enemy_key))
+                c.execute("UPDATE players SET gold=gold+?,hp=?,energy=energy-?,updated_at=? WHERE guild_id=? AND user_id=?", (reward_gold, new_hp, COMBAT_ENERGY_COST, now_iso(), guild_id, user_id))
+                self._add_xp(c, guild_id, user_id, enemy["reward_xp"])
+            else:
+                c.execute("UPDATE players SET hp=?,energy=energy-?,updated_at=? WHERE guild_id=? AND user_id=?", (new_hp or 1, COMBAT_ENERGY_COST, now_iso(), guild_id, user_id))
+            c.execute("INSERT OR REPLACE INTO cooldowns VALUES (?,?, 'hunt', ?)", (guild_id, user_id, now + COMBAT_COOLDOWN_SECONDS))
+            c.execute("INSERT INTO transaction_log(guild_id,user_id,action,resource,amount,details) VALUES (?,?, 'hunt','gold',?,?)", (guild_id, user_id, reward_gold, enemy_key))
+        return {"enemy": enemy["name"], "won": won, "damage": damage, "incoming": incoming, "hp": new_hp or 1, "rounds": rounds, "reward_gold": reward_gold}
+
+    def boss_info(self, guild_id: str) -> dict[str, Any]:
+        self.ensure_village(guild_id)
+        with self.db.transaction() as c:
+            row = c.execute("SELECT * FROM village_bosses WHERE guild_id=?", (guild_id,)).fetchone()
+            if row is None:
+                c.execute("INSERT OR REPLACE INTO village_bosses(guild_id,boss_key,hp,max_hp,active,updated_at) VALUES (?,?,?, ?,1,?)", (guild_id, BOSS["key"], BOSS["max_hp"], BOSS["max_hp"], now_iso()))
+                row = c.execute("SELECT * FROM village_bosses WHERE guild_id=?", (guild_id,)).fetchone()
+            return {"name": BOSS["name"], "hp": row["hp"], "max_hp": row["max_hp"], "active": bool(row["active"])}
+
+    def start_boss(self, guild_id: str) -> dict[str, Any]:
+        self.ensure_village(guild_id)
+        with self.db.transaction() as c:
+            c.execute("INSERT OR REPLACE INTO village_bosses(guild_id,boss_key,hp,max_hp,active,updated_at) VALUES (?,?,?, ?,1,?)", (guild_id, BOSS["key"], BOSS["max_hp"], BOSS["max_hp"], now_iso()))
+            c.execute("INSERT INTO transaction_log(guild_id,action,details) VALUES (?, 'event_start', ?)", (guild_id, BOSS["key"]))
+        return {"name": BOSS["name"], "hp": BOSS["max_hp"], "max_hp": BOSS["max_hp"], "active": True}
+
+    def attack_boss(self, guild_id: str, user_id: str, now: float | None = None) -> dict[str, Any]:
+        now = now if now is not None else time.time()
+        with self.db.transaction() as c:
+            player = self._player(c, guild_id, user_id)
+            boss = c.execute("SELECT * FROM village_bosses WHERE guild_id=? AND active=1", (guild_id,)).fetchone()
+            if boss is None:
+                raise GameError("Chưa có boss. Hãy dùng /boss để triệu hồi.")
+            cd = c.execute("SELECT available_at FROM cooldowns WHERE guild_id=? AND user_id=? AND action='boss_attack'", (guild_id, user_id)).fetchone()
+            if cd and cd["available_at"] > now:
+                raise GameError(f"Bạn còn phải chờ {int(cd['available_at'] - now) + 1} giây.")
+            if player["energy"] < COMBAT_ENERGY_COST:
+                raise GameError("Bạn không đủ năng lượng để tấn công boss.")
+            damage = max(1, self._combat_attack_power(c, guild_id, user_id) + self.rng.randint(-3, 5))
+            boss_hp = max(0, boss["hp"] - damage)
+            incoming = 0 if boss_hp == 0 else self.rng.randint(*BOSS["attack"])
+            new_hp = max(1, player["hp"] - incoming)
+            defeated = boss_hp == 0
+            c.execute("UPDATE players SET hp=?,energy=energy-?,updated_at=? WHERE guild_id=? AND user_id=?", (new_hp, COMBAT_ENERGY_COST, now_iso(), guild_id, user_id))
+            c.execute("INSERT OR REPLACE INTO cooldowns VALUES (?,?, 'boss_attack', ?)", (guild_id, user_id, now + BOSS_ATTACK_COOLDOWN_SECONDS))
+            if defeated:
+                reward = BOSS["reward_gold"]
+                resource, amount = BOSS["drop"]
+                c.execute("UPDATE players SET gold=gold+? WHERE guild_id=? AND user_id=?", (reward, guild_id, user_id))
+                c.execute("INSERT OR IGNORE INTO inventory(guild_id,user_id,resource,quantity) VALUES (?,?,?,0)", (guild_id, user_id, resource))
+                c.execute("UPDATE inventory SET quantity=quantity+? WHERE guild_id=? AND user_id=? AND resource=?", (amount, guild_id, user_id, resource))
+                c.execute("INSERT INTO transaction_log(guild_id,user_id,action,resource,amount,details) VALUES (?,?, 'boss_drop',?,?,?)", (guild_id, user_id, resource, amount, BOSS["key"]))
+                self._add_xp(c, guild_id, user_id, BOSS["reward_xp"])
+                c.execute("UPDATE village_bosses SET hp=0,active=0,updated_at=? WHERE guild_id=?", (now_iso(), guild_id))
+                c.execute("UPDATE villages SET xp=xp+?,updated_at=? WHERE guild_id=?", (BOSS["reward_xp"], now_iso(), guild_id))
+            else:
+                reward = 0
+                c.execute("UPDATE village_bosses SET hp=?,updated_at=? WHERE guild_id=?", (boss_hp, now_iso(), guild_id))
+            c.execute("INSERT INTO transaction_log(guild_id,user_id,action,resource,amount,details) VALUES (?,?, 'boss_attack','gold',?,?)", (guild_id, user_id, reward, BOSS["key"]))
+        return {"name": BOSS["name"], "damage": damage, "incoming": incoming, "hp": boss_hp, "defeated": defeated, "reward_gold": reward}

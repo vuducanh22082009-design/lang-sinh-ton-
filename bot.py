@@ -7,7 +7,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from survival_bot.config import BUILDINGS, EXPLORE_ZONES, GATHER_ZONES, RECIPES, RESOURCE_NAMES, SETTINGS
+from survival_bot.config import BOSS, BUILDINGS, ENEMIES, EXPLORE_ZONES, GATHER_ZONES, RECIPES, RESOURCE_NAMES, SETTINGS
 from survival_bot.db import Database
 from survival_bot.service import GameError, GameService, xp_needed
 
@@ -175,6 +175,37 @@ async def explore(interaction: discord.Interaction, zone: app_commands.Choice[st
     except GameError as e: await interaction.response.send_message(embed=error_embed(str(e)), ephemeral=True)
 
 
+@bot.tree.command(name="hunt", description="Săn quái vật và nhận phần thưởng")
+@app_commands.choices(enemy=[app_commands.Choice(name=v["name"], value=k) for k, v in ENEMIES.items()])
+async def hunt(interaction: discord.Interaction, enemy: app_commands.Choice[str] | None = None) -> None:
+    try:
+        r = game.hunt(guild_id(interaction), str(interaction.user.id), enemy.value if enemy else None)
+        title = "Chiến thắng!" if r["won"] else "Bạn đã thất bại"
+        description = f"⚔️ {r['enemy']}\n**{r['rounds']} lượt** • Gây **{r['damage']}** sát thương • Nhận **{r['incoming']}** sát thương\n❤️ Máu còn: **{r['hp']}**"
+        if r["won"]: description += f"\n\n🎁 Nhận **{r['reward_gold']} vàng** và XP chiến đấu."
+        await interaction.response.send_message(embed=discord.Embed(title=title, description=description, color=0x2ECC71 if r["won"] else 0xE74C3C))
+    except GameError as e: await interaction.response.send_message(embed=error_embed(str(e)), ephemeral=True)
+
+
+@bot.tree.command(name="boss", description="Xem boss chung của làng")
+async def boss(interaction: discord.Interaction) -> None:
+    try:
+        r = game.boss_info(guild_id(interaction))
+        status = "Cả server hãy dùng `/boss-attack` để cùng hạ boss!" if r["active"] else "Boss đã bị hạ. Admin có thể dùng `/admin event-start` để mở đợt mới."
+        await interaction.response.send_message(embed=discord.Embed(title=f"Boss: {r['name']}", description=f"❤️ HP: **{r['hp']}/{r['max_hp']}**\n\n{status}\nPhần thưởng hạ gục: **{BOSS['reward_gold']} vàng** + tài nguyên hiếm.", color=0xE74C3C))
+    except GameError as e: await interaction.response.send_message(embed=error_embed(str(e)), ephemeral=True)
+
+
+@bot.tree.command(name="boss-attack", description="Tấn công boss chung của làng")
+async def boss_attack(interaction: discord.Interaction) -> None:
+    try:
+        r = game.attack_boss(guild_id(interaction), str(interaction.user.id))
+        description = f"⚔️ Bạn gây **{r['damage']}** sát thương và nhận **{r['incoming']}** sát thương.\n❤️ Boss còn: **{r['hp']}/{BOSS['max_hp']}**"
+        if r["defeated"]: description += f"\n\n🏆 **Boss đã bị đánh bại!** Bạn nhận **{r['reward_gold']} vàng**."
+        await interaction.response.send_message(embed=discord.Embed(title="Đánh boss", description=description, color=0xF1C40F if r["defeated"] else 0xE74C3C))
+    except GameError as e: await interaction.response.send_message(embed=error_embed(str(e)), ephemeral=True)
+
+
 admin = app_commands.Group(name="admin", description="Công cụ quản trị Làng Sinh Tồn")
 bot.tree.add_command(admin)
 
@@ -199,6 +230,14 @@ async def admin_logs(interaction: discord.Interaction) -> None:
         require_admin(interaction); rows = game.admin_logs(guild_id(interaction))
         description = "\n".join(f"`{r['created_at']}` {r['action']} {r['resource'] or ''} {r['amount'] or ''}" for r in rows) or "Chưa có log."
         await interaction.response.send_message(embed=discord.Embed(title="Transaction logs", description=description, color=0x7F8C8D), ephemeral=True)
+    except GameError as e: await interaction.response.send_message(embed=error_embed(str(e)), ephemeral=True)
+
+
+@admin.command(name="event-start", description="Bắt đầu lại sự kiện boss của làng")
+async def admin_event_start(interaction: discord.Interaction) -> None:
+    try:
+        require_admin(interaction); r = game.start_boss(guild_id(interaction))
+        await interaction.response.send_message(f"📣 Đã triệu hồi **{r['name']}** với **{r['max_hp']} HP**.", ephemeral=True)
     except GameError as e: await interaction.response.send_message(embed=error_embed(str(e)), ephemeral=True)
 
 

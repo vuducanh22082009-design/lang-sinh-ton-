@@ -19,7 +19,9 @@ Repository ban đầu là Python/discord.py, vì vậy MVP giữ hệ sinh thái
 - `/craft`, `/equip` với recipe, vật phẩm, độ bền và trạng thái trang bị.
 - `/quest` với nhiệm vụ cá nhân và phần thưởng vàng/XP.
 - `/explore` với phần thưởng, túi vàng và bẫy, kèm cooldown.
-- `/admin give`, `/admin logs`, `/admin village-reset` với kiểm tra quyền Administrator.
+- `/hunt` combat nhiều lượt với quái vật, sát thương, HP, XP, vàng, loot và độ bền vũ khí.
+- `/boss`, `/boss-attack` boss chung theo server; toàn bộ người chơi cùng gây sát thương trong transaction.
+- `/admin give`, `/admin logs`, `/admin event-start`, `/admin village-reset` với kiểm tra quyền Administrator.
 - Structured logging cơ bản, endpoint health `/`, xử lý lỗi thân thiện.
 - Unit test cho đăng ký, cooldown, daily, tách server, đóng góp, race condition, craft và explore.
 
@@ -56,6 +58,8 @@ pytest -q
 5. Dùng `/contribute resource:wood amount:10` để đưa tài nguyên vào kho làng.
 6. Dùng `/village` và `/build building:house` để kiểm tra/nâng cấp.
 7. Dùng `/leaderboard` xem xếp hạng riêng của server.
+8. Dùng `/hunt enemy:Sói hoang` để chiến đấu; dùng `/boss` xem boss chung và `/boss-attack` để góp sát thương.
+9. Khi boss bị hạ, admin có thể dùng `/admin event-start` để mở đợt boss mới.
 
 ## Cấu trúc
 
@@ -70,7 +74,7 @@ tests/test_game.py        # unit tests
 ## Chưa làm / hướng mở rộng
 
 - PostgreSQL/Prisma tương đương cho production, Redis distributed cooldown.
-- Combat, `/event` và các event server thời gian thực.
+- Các event server thời gian thực ngoài boss, combat PvE nâng cao và boss nhiều giai đoạn.
 - Role admin cấu hình riêng, phân trang Button/Select Menu/Modal nâng cao.
 - Hồi năng lượng theo thời gian, công thức level làng, nhiệm vụ và snapshot leaderboard.
 - Deploy worker/health monitoring production và migration tool.

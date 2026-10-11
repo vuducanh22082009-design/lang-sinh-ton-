@@ -51,6 +51,11 @@ CREATE TABLE IF NOT EXISTS player_quests (
   completed INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (guild_id, user_id, quest_key), FOREIGN KEY (guild_id, user_id) REFERENCES players(guild_id, user_id) ON DELETE CASCADE
 );
+CREATE TABLE IF NOT EXISTS village_bosses (
+  guild_id TEXT PRIMARY KEY, boss_key TEXT NOT NULL, hp INTEGER NOT NULL CHECK(hp >= 0), max_hp INTEGER NOT NULL CHECK(max_hp > 0),
+  active INTEGER NOT NULL DEFAULT 1, spawned_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (guild_id) REFERENCES villages(guild_id) ON DELETE CASCADE
+);
 CREATE INDEX IF NOT EXISTS idx_players_level ON players(guild_id, level DESC, xp DESC);
 CREATE INDEX IF NOT EXISTS idx_players_gold ON players(guild_id, gold DESC);
 CREATE INDEX IF NOT EXISTS idx_transactions_guild ON transaction_log(guild_id, created_at DESC);
