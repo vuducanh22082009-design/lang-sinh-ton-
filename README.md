@@ -46,6 +46,28 @@ Bot cần scope `bot` và `applications.commands`; permissions MVP có thể dù
 - `DATABASE_PATH`: mặc định `survival.db`.
 - `ADMIN_USER_IDS`: danh sách ID Discord admin, phân tách bằng dấu phẩy. Mặc định đã có `1026417896114630676`; admin ID này được dùng lệnh admin kể cả khi không có quyền Administrator trong server.
 
+## Setup Discord bot lần đầu
+
+1. Mở [Discord Developer Portal](https://discord.com/developers/applications) và chọn **New Application**.
+2. Vào **Bot → Add Bot**, sau đó dùng **Reset Token** và lưu token ở nơi an toàn. Không gửi token vào chat hoặc commit vào Git.
+3. Vào **OAuth2 → URL Generator**, chọn scopes `bot` và `applications.commands`.
+4. Chọn quyền tối thiểu `View Channels`, `Send Messages` và `Embed Links`, mở URL được tạo rồi mời bot vào server.
+5. Lấy **Application ID** làm `DISCORD_CLIENT_ID` và lấy **Server ID** làm `DISCORD_GUILD_ID` nếu muốn sync command nhanh trong server test.
+
+## Deploy Render để bot chạy liên tục
+
+Repository đã có [`render.yaml`](./render.yaml). File này cấu hình Docker web service, health check `/health` và volume `/app/data` để giữ SQLite database qua lần restart.
+
+1. Push repository lên GitHub (đã hoàn thành).
+2. Trong Render chọn **New → Blueprint**, kết nối repository `vuducanh22082009-design/lang-sinh-ton-`.
+3. Kiểm tra service `village-survival-bot` được đọc từ `render.yaml`.
+4. Khi Render hỏi secret, điền `DISCORD_TOKEN` trực tiếp trong ô secret của Render; không ghi vào `render.yaml`.
+5. Điền `DISCORD_CLIENT_ID` và `DISCORD_GUILD_ID` nếu có. Giữ `DATABASE_PATH=/app/data/survival.db` để volume được sử dụng.
+6. Deploy và kiểm tra log phải có `Logged in as ...`.
+7. Kiểm tra health URL của service: `/health` phải trả JSON có `status: ok` và `discord_ready: true`.
+
+Không đổi service sang loại không có volume nếu muốn giữ dữ liệu game. Khi chuyển sang PostgreSQL production, thay `Database` bằng repository PostgreSQL và dùng `DATABASE_URL` thay cho SQLite.
+
 ## Kiểm thử
 
 ```bash

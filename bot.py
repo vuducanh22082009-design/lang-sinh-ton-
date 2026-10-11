@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 import threading
 from flask import Flask
 import discord
@@ -15,9 +16,25 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 log = logging.getLogger("village-survival")
 
 app = Flask(__name__)
+STARTED_AT = time.time()
 @app.get("/")
 def health() -> str:
     return "Village Survival is alive"
+
+@app.get("/health")
+def health_details():
+    try:
+        with db.connect() as connection:
+            connection.execute("SELECT 1")
+        return {
+            "status": "ok",
+            "discord_ready": bot.is_ready(),
+            "guild_count": len(bot.guilds),
+            "uptime_seconds": int(time.time() - STARTED_AT),
+        }, 200
+    except Exception:
+        log.exception("Health check failed")
+        return {"status": "error"}, 503
 
 def run_health() -> None:
     app.run(host="0.0.0.0", port=int(__import__("os").environ.get("PORT", "10000")), use_reloader=False)

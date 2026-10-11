@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: village-survival-bot
+    runtime: docker
+    plan: starter
+    autoDeploy: true
+    healthCheckPath: /health
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    disk:
+      name: village-survival-data
+      mountPath: /app/data
+      sizeGB: 1
+    envVars:
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: DISCORD_CLIENT_ID
+        sync: false
+      - key: DISCORD_GUILD_ID
+        sync: false
+      - key: ADMIN_USER_IDS
+        value: "1026417896114630676"
+      - key: DATABASE_PATH
+        value: /app/data/survival.db
+      - key: PORT
+        value: "10000"
+      - key: NODE_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
