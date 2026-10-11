@@ -6,7 +6,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any
 
-from .config import BUILDINGS, DAILY_COOLDOWN_SECONDS, GATHER_COOLDOWN_SECONDS, GATHER_ENERGY_COST, GATHER_ZONES, MAX_DAILY_STREAK, RESOURCE_NAMES, STARTING_RESOURCES
+from .config import BUILDINGS, DAILY_COOLDOWN_SECONDS, EXPLORE_ZONES, GATHER_COOLDOWN_SECONDS, GATHER_ENERGY_COST, GATHER_ZONES, MAX_DAILY_STREAK, QUESTS, RECIPES, RESOURCE_NAMES, STARTING_RESOURCES
 from .db import Database
 
 
@@ -160,3 +160,113 @@ class GameService:
         order = columns.get(metric, columns["level"])
         with self.db.connect() as c:
             return [dict(r) for r in c.execute(f"SELECT character_name, level, gold, village_contribution, total_gathered, quests_completed FROM players WHERE guild_id=? ORDER BY {order} LIMIT ?", (guild_id, limit))]
+
+
+    def craft(self, guild_id: str, user_id: str, recipe_key: str) -> dict[str, Any]:
+        recipe = RECIPES.get(recipe_key)
+        if recipe is None:
+            raise GameError("Công thức không hợp lệ.")
+        with self.db.transaction() as c:
+            self._player(c, guild_id, user_id)
+            for resource, amount in recipe["cost"].items():
+                row = c.execute("SELECT quantity FROM inventory WHERE guild_id=? AND user_id=? AND resource=?", (guild_id, user_id, resource)).fetchone()
+                if not row or row[0] < amount:
+                    raise GameError(f"Không đủ {RESOURCE_NAMES[resource]} để chế tạo.")
+            for resource, amount in recipe["cost"].items():
+                c.execute("UPDATE inventory SET quantity=quantity-? WHERE guild_id=? AND user_id=? AND resource=?", (amount, guild_id, user_id, resource))
+            c.execute("INSERT INTO item_inventory(guild_id,user_id,item_key,quantity,durability) VALUES (?,?,?,?,?) ON CONFLICT(guild_id,user_id,item_key) DO UPDATE SET quantity=quantity+1,durability=excluded.durability", (guild_id, user_id, recipe_key, 1, recipe["durability"]))
+            self._add_xp(c, guild_id, user_id, 15)
+            c.execute("INSERT INTO transaction_log(guild_id,user_id,action,details) VALUES (?,?, 'craft', ?)", (guild_id, user_id, recipe_key))
+        return {"name": recipe["name"], "durability": recipe["durability"]}
+
+    def equip(self, guild_id: str, user_id: str, item_key: str) -> dict[str, Any]:
+        with self.db.transaction() as c:
+            self._player(c, guild_id, user_id)
+            item = c.execute("SELECT quantity FROM item_inventory WHERE guild_id=? AND user_id=? AND item_key=?", (guild_id, user_id, item_key)).fetchone()
+            if not item or item[0] <= 0:
+                raise GameError("Bạn chưa sở hữu vật phẩm này.")
+            c.execute("UPDATE item_inventory SET equipped=0 WHERE guild_id=? AND user_id=?", (guild_id, user_id))
+            c.execute("UPDATE item_inventory SET equipped=1 WHERE guild_id=? AND user_id=? AND item_key=?", (guild_id, user_id, item_key))
+            c.execute("INSERT INTO transaction_log(guild_id,user_id,action,details) VALUES (?,?, 'equip', ?)", (guild_id, user_id, item_key))
+        return {"item_key": item_key}
+
+    def items(self, guild_id: str, user_id: str) -> list[dict[str, Any]]:
+        with self.db.connect() as c:
+            self._player(c, guild_id, user_id)
+            return [dict(row) for row in c.execute("SELECT item_key,quantity,durability,equipped FROM item_inventory WHERE guild_id=? AND user_id=? AND quantity>0 ORDER BY item_key", (guild_id, user_id))]
+
+    def quests(self, guild_id: str, user_id: str) -> list[dict[str, Any]]:
+        with self.db.transaction() as c:
+            player = self._player(c, guild_id, user_id)
+            result = []
+            for key, spec in QUESTS.items():
+                c.execute("INSERT OR IGNORE INTO player_quests(guild_id,user_id,quest_key) VALUES (?,?,?)", (guild_id, user_id, key))
+                row = c.execute("SELECT progress,completed FROM player_quests WHERE guild_id=? AND user_id=? AND quest_key=?", (guild_id, user_id, key)).fetchone()
+                progress = player["total_gathered"] if spec["resource"] == "wood" else player["village_contribution"]
+                progress = min(progress, spec["target"])
+                c.execute("UPDATE player_quests SET progress=?,updated_at=? WHERE guild_id=? AND user_id=? AND quest_key=? AND completed=0", (progress, now_iso(), guild_id, user_id, key))
+                result.append({"key": key, "name": spec["name"], "progress": progress, "target": spec["target"], "completed": bool(row["completed"])})
+            return result
+
+    def claim_quest(self, guild_id: str, user_id: str, quest_key: str) -> dict[str, Any]:
+        spec = QUESTS.get(quest_key)
+        if spec is None:
+            raise GameError("Nhiệm vụ không hợp lệ.")
+        self.quests(guild_id, user_id)
+        with self.db.transaction() as c:
+            row = c.execute("SELECT progress,completed FROM player_quests WHERE guild_id=? AND user_id=? AND quest_key=?", (guild_id, user_id, quest_key)).fetchone()
+            if row["completed"]:
+                raise GameError("Nhiệm vụ này đã nhận thưởng.")
+            if row["progress"] < spec["target"]:
+                raise GameError(f"Chưa hoàn thành nhiệm vụ: {row['progress']}/{spec['target']}.")
+            c.execute("UPDATE player_quests SET completed=1,updated_at=? WHERE guild_id=? AND user_id=? AND quest_key=?", (now_iso(), guild_id, user_id, quest_key))
+            c.execute("UPDATE players SET gold=gold+?,quests_completed=quests_completed+1,updated_at=? WHERE guild_id=? AND user_id=?", (spec["reward_gold"], now_iso(), guild_id, user_id))
+            self._add_xp(c, guild_id, user_id, spec["reward_xp"])
+            c.execute("INSERT INTO transaction_log(guild_id,user_id,action,resource,amount,details) VALUES (?,?, 'quest','gold',?,?)", (guild_id, user_id, spec["reward_gold"], quest_key))
+        return {"name": spec["name"], "gold": spec["reward_gold"], "xp": spec["reward_xp"]}
+
+    def explore(self, guild_id: str, user_id: str, zone_key: str, now: float | None = None) -> dict[str, Any]:
+        if zone_key not in EXPLORE_ZONES:
+            raise GameError("Khu vực khám phá không hợp lệ.")
+        now = now if now is not None else time.time()
+        with self.db.transaction() as c:
+            player = self._player(c, guild_id, user_id)
+            cd = c.execute("SELECT available_at FROM cooldowns WHERE guild_id=? AND user_id=? AND action='explore'", (guild_id, user_id)).fetchone()
+            if cd and cd["available_at"] > now:
+                raise GameError(f"Bạn còn phải chờ {int(cd['available_at'] - now) + 1} giây.")
+            if player["energy"] < 15:
+                raise GameError("Bạn không đủ năng lượng để khám phá.")
+            roll = self.rng.random()
+            if roll < 0.55:
+                resource, amount = self.rng.choice([("wood", 8), ("stone", 6), ("food", 7), ("herb", 3)])
+                c.execute("UPDATE inventory SET quantity=quantity+? WHERE guild_id=? AND user_id=? AND resource=?", (amount, guild_id, user_id, resource))
+                message = f"Tìm thấy {amount} {RESOURCE_NAMES[resource]}"; gold = 0
+            elif roll < 0.8:
+                gold = self.rng.randint(20, 60); message = f"Tìm thấy một túi {gold} vàng"
+                c.execute("UPDATE players SET gold=gold+? WHERE guild_id=? AND user_id=?", (gold, guild_id, user_id))
+            else:
+                gold = 0; message = "Dính bẫy nhưng may mắn thoát được"; c.execute("UPDATE players SET hp=MAX(1,hp-10) WHERE guild_id=? AND user_id=?", (guild_id, user_id))
+            c.execute("UPDATE players SET energy=energy-15,updated_at=? WHERE guild_id=? AND user_id=?", (now_iso(), guild_id, user_id))
+            c.execute("INSERT OR REPLACE INTO cooldowns VALUES (?,?, 'explore', ?)", (guild_id, user_id, now + 60))
+            c.execute("INSERT INTO transaction_log(guild_id,user_id,action,details) VALUES (?,?, 'explore', ?)", (guild_id, user_id, zone_key))
+        return {"zone": EXPLORE_ZONES[zone_key], "message": message}
+
+    def admin_give(self, guild_id: str, user_id: str, resource: str, amount: int) -> None:
+        if resource not in RESOURCE_NAMES or amount <= 0 or amount > 1_000_000:
+            raise GameError("Tài nguyên hoặc số lượng admin give không hợp lệ.")
+        with self.db.transaction() as c:
+            self._player(c, guild_id, user_id)
+            if resource == "gold":
+                c.execute("UPDATE players SET gold=gold+?,updated_at=? WHERE guild_id=? AND user_id=?", (amount, now_iso(), guild_id, user_id))
+            else:
+                c.execute("UPDATE inventory SET quantity=quantity+? WHERE guild_id=? AND user_id=? AND resource=?", (amount, guild_id, user_id, resource))
+            c.execute("INSERT INTO transaction_log(guild_id,user_id,action,resource,amount) VALUES (?,?, 'admin_give',?,?)", (guild_id, user_id, resource, amount))
+
+    def admin_logs(self, guild_id: str, limit: int = 10) -> list[dict[str, Any]]:
+        with self.db.connect() as c:
+            return [dict(r) for r in c.execute("SELECT user_id,action,resource,amount,details,created_at FROM transaction_log WHERE guild_id=? ORDER BY id DESC LIMIT ?", (guild_id, min(limit, 50)))]
+
+    def admin_reset(self, guild_id: str) -> None:
+        with self.db.transaction() as c:
+            c.execute("DELETE FROM villages WHERE guild_id=?", (guild_id,))
+        self.ensure_village(guild_id)

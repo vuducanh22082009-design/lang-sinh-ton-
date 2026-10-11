@@ -64,3 +64,22 @@ def test_concurrent_contributions_do_not_make_negative_inventory(tmp_path):
     for t in threads: t.join()
     assert results.count("ok") == 1
     assert service.inventory("g", "u")["wood"] >= 0
+
+
+def test_craft_equip_and_explore(game):
+    game.register("g", "u", "A")
+    crafted = game.craft("g", "u", "stone_axe")
+    assert crafted["name"] == "Rìu đá"
+    game.equip("g", "u", "stone_axe")
+    assert game.items("g", "u")[0]["equipped"] == 1
+    explored = game.explore("g", "u", "north", now=100)
+    assert explored["zone"] == "Rừng phía Bắc"
+
+
+def test_quest_progress_and_admin_give(game):
+    game.register("g", "u", "A")
+    game.admin_give("g", "u", "gold", 500)
+    assert game.profile("g", "u")["gold"] == 600
+    game.gather("g", "u", "forest", now=100)
+    rows = game.quests("g", "u")
+    assert rows[0]["progress"] >= 0

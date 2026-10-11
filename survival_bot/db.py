@@ -41,6 +41,16 @@ CREATE TABLE IF NOT EXISTS transaction_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id TEXT NOT NULL, user_id TEXT, action TEXT NOT NULL,
   resource TEXT, amount INTEGER, details TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS item_inventory (
+  guild_id TEXT NOT NULL, user_id TEXT NOT NULL, item_key TEXT NOT NULL, quantity INTEGER NOT NULL DEFAULT 0 CHECK(quantity >= 0),
+  durability INTEGER NOT NULL DEFAULT 0 CHECK(durability >= 0), equipped INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (guild_id, user_id, item_key), FOREIGN KEY (guild_id, user_id) REFERENCES players(guild_id, user_id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS player_quests (
+  guild_id TEXT NOT NULL, user_id TEXT NOT NULL, quest_key TEXT NOT NULL, progress INTEGER NOT NULL DEFAULT 0 CHECK(progress >= 0),
+  completed INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (guild_id, user_id, quest_key), FOREIGN KEY (guild_id, user_id) REFERENCES players(guild_id, user_id) ON DELETE CASCADE
+);
 CREATE INDEX IF NOT EXISTS idx_players_level ON players(guild_id, level DESC, xp DESC);
 CREATE INDEX IF NOT EXISTS idx_players_gold ON players(guild_id, gold DESC);
 CREATE INDEX IF NOT EXISTS idx_transactions_guild ON transaction_log(guild_id, created_at DESC);

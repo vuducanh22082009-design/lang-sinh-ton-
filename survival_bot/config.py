@@ -46,3 +46,15 @@ GATHER_ENERGY_COST = 10
 GATHER_COOLDOWN_SECONDS = 30
 DAILY_COOLDOWN_SECONDS = 86400
 MAX_DAILY_STREAK = 7
+
+RECIPES = {
+    "stone_axe": {"name": "Rìu đá", "cost": {"wood": 8, "stone": 5}, "durability": 30},
+    "stone_pickaxe": {"name": "Cuốc đá", "cost": {"wood": 8, "stone": 8}, "durability": 30},
+    "iron_sword": {"name": "Kiếm sắt", "cost": {"wood": 4, "iron": 12}, "durability": 40},
+    "health_potion": {"name": "Thuốc hồi máu", "cost": {"herb": 3, "water": 2}, "durability": 1},
+}
+EXPLORE_ZONES = {"north": "Rừng phía Bắc", "east": "Đồi phía Đông", "south": "Hồ phía Nam"}
+QUESTS = {
+    "gather_wood": {"name": "Thu thập 20 gỗ", "target": 20, "resource": "wood", "reward_gold": 60, "reward_xp": 40},
+    "contribute": {"name": "Đóng góp 10 tài nguyên cho làng", "target": 10, "resource": "any", "reward_gold": 80, "reward_xp": 50},
+}

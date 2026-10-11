@@ -18,8 +18,12 @@ Mã bot cũ được giữ tại `legacy_bot.py` để có thể tham khảo ho�
 - `/contribute` đóng góp tài nguyên bằng transaction, kiểm tra số dư và log.
 - `/build` nâng cấp 6 loại công trình với chi phí từ config.
 - `/leaderboard` theo server.
+- `/craft`, `/equip` với recipe, vật phẩm, độ bền và trạng thái trang bị.
+- `/quest` với nhiệm vụ cá nhân và phần thưởng vàng/XP.
+- `/explore` với phần thưởng, túi vàng và bẫy, kèm cooldown.
+- `/admin give`, `/admin logs`, `/admin village-reset` với kiểm tra quyền Administrator.
 - Structured logging cơ bản, endpoint health `/`, xử lý lỗi thân thiện.
-- Unit test cho đăng ký, cooldown, daily, tách server, đóng góp và race condition.
+- Unit test cho đăng ký, cooldown, daily, tách server, đóng góp, race condition, craft và explore.
 
 ## Chạy local
 
@@ -69,8 +73,8 @@ legacy_bot.py             # bot cũ từ repository trước MVP
 ## Chưa làm / hướng mở rộng
 
 - PostgreSQL/Prisma tương đương cho production, Redis distributed cooldown.
-- `/craft`, `/equip`, `/quest`, `/explore`, combat và event server.
-- Admin command với role cấu hình, phân trang Button/Select Menu/Modal.
+- Combat, `/event` và các event server thời gian thực.
+- Role admin cấu hình riêng, phân trang Button/Select Menu/Modal nâng cao.
 - Hồi năng lượng theo thời gian, công thức level làng, nhiệm vụ và snapshot leaderboard.
 - Deploy worker/health monitoring production và migration tool.
 
