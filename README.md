@@ -9,6 +9,7 @@ Repository ban đầu là Python/discord.py, vì vậy MVP giữ hệ sinh thái
 ## Đã hoàn thành
 
 - `/start` đăng ký nhân vật theo từng server, quà khởi đầu và chống đăng ký trùng.
+- `/guide` hướng dẫn tân thủ bằng Embed tiếng Việt, hiển thị riêng tư.
 - `/profile`, `/inventory`.
 - `/gather` với 4 khu vực, năng lượng, random reward, XP và cooldown phía server.
 - `/daily` với streak giới hạn 7 ngày, UTC và chống nhận hai lần.

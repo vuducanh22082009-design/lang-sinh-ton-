@@ -65,6 +65,52 @@ async def start(interaction: discord.Interaction, name: str) -> None:
     except GameError as e: await interaction.response.send_message(embed=error_embed(str(e)), ephemeral=True)
 
 
+@bot.tree.command(name="guide", description="Hướng dẫn tân thủ Làng Sinh Tồn")
+async def guide(interaction: discord.Interaction) -> None:
+    embed = discord.Embed(
+        title="Hướng dẫn tân thủ — Làng Bình Minh",
+        description="Chào mừng bạn đến với làng sinh tồn! Hãy làm theo các bước dưới đây để bắt đầu.",
+        color=0x3498DB,
+    )
+    embed.add_field(
+        name="1. Tạo nhân vật",
+        value="Dùng `/start name:Tên_của_bạn` để nhận nhân vật và quà khởi đầu.",
+        inline=False,
+    )
+    embed.add_field(
+        name="2. Kiểm tra nhân vật",
+        value="`/profile` xem level, XP, máu, năng lượng và vàng.\n`/inventory` xem tài nguyên và vật phẩm.",
+        inline=False,
+    )
+    embed.add_field(
+        name="3. Thu thập tài nguyên",
+        value="Dùng `/gather` chọn Rừng, Mỏ đá, Đồng bằng hoặc Hồ nước. Mỗi lần thu thập tốn năng lượng và có cooldown.",
+        inline=False,
+    )
+    embed.add_field(
+        name="4. Phát triển làng",
+        value="Dùng `/contribute` đưa tài nguyên vào kho chung, `/village` xem tiến trình và `/build` xây công trình.",
+        inline=False,
+    )
+    embed.add_field(
+        name="5. Nhận thưởng và nhiệm vụ",
+        value="Dùng `/daily` mỗi ngày, `/quest` xem nhiệm vụ và `/explore` khám phá vùng hoang dã.",
+        inline=False,
+    )
+    embed.add_field(
+        name="6. Chế tạo và chiến đấu",
+        value="Dùng `/craft` chế tạo, `/equip` trang bị, `/hunt` săn quái. Khi làng có boss, dùng `/boss` xem HP và `/boss-attack` cùng mọi người tấn công.",
+        inline=False,
+    )
+    embed.add_field(
+        name="Mẹo quan trọng",
+        value="Năng lượng và cooldown là giới hạn phía server. Hãy phối hợp đóng góp tài nguyên, không spam lệnh và xem `/leaderboard` để theo dõi thành tích.",
+        inline=False,
+    )
+    embed.set_footer(text="Lệnh admin chỉ dành cho quản trị viên server.")
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
 @bot.tree.command(name="profile", description="Xem hồ sơ nhân vật")
 async def profile(interaction: discord.Interaction) -> None:
     try:
