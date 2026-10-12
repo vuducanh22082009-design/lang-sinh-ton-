@@ -78,11 +78,11 @@ UptimeRobot chỉ dùng để kiểm tra HTTP health endpoint; nó không thay t
 4. Đặt URL monitor là:
 
 ```text
-https://<ten-service>.onrender.com/health
+https://<ten-service>.onrender.com/uptime
 ```
 
 5. Chọn chu kỳ kiểm tra phù hợp, ví dụ 5 phút, rồi lưu monitor.
-6. Khi endpoint trả HTTP `200` và JSON có `"status": "ok"`, monitor sẽ báo UP.
+6. Khi endpoint trả HTTP `200` và nội dung `OK`, monitor sẽ báo UP. Dùng `/health` riêng khi cần kiểm tra database và Discord.
 
 Không đặt `DISCORD_TOKEN` vào UptimeRobot. Token chỉ được lưu trong Render Environment.
 

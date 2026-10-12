@@ -22,6 +22,11 @@ STARTED_AT = time.time()
 def health() -> str:
     return "Village Survival is alive"
 
+@app.get("/uptime")
+def uptime() -> str:
+    """Minimal endpoint for external monitors such as UptimeRobot."""
+    return "OK", 200
+
 @app.get("/health")
 def health_details():
     try:
